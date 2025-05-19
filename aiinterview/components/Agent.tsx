@@ -65,21 +65,21 @@ const Agent = ({
       console.log("Error:", error);
     };
 
-    // vapi.on("call-start", onCallStart);
-    // vapi.on("call-end", onCallEnd);
-    // vapi.on("message", onMessage);
-    // vapi.on("speech-start", onSpeechStart);
-    // vapi.on("speech-end", onSpeechEnd);
-    // vapi.on("error", onError);
+    vapi.on("call-start", onCallStart);
+    vapi.on("call-end", onCallEnd);
+    vapi.on("message", onMessage);
+    vapi.on("speech-start", onSpeechStart);
+    vapi.on("speech-end", onSpeechEnd);
+    vapi.on("error", onError);
 
-    // return () => {
-    //   vapi.off("call-start", onCallStart);
-    //   vapi.off("call-end", onCallEnd);
-    //   vapi.off("message", onMessage);
-    //   vapi.off("speech-start", onSpeechStart);
-    //   vapi.off("speech-end", onSpeechEnd);
-    //   vapi.off("error", onError);
-    // };
+    return () => {
+      vapi.off("call-start", onCallStart);
+      vapi.off("call-end", onCallEnd);
+      vapi.off("message", onMessage);
+      vapi.off("speech-start", onSpeechStart);
+      vapi.off("speech-end", onSpeechEnd);
+      vapi.off("error", onError);
+    };
   }, []);
 
   useEffect(() => {
@@ -120,9 +120,11 @@ const Agent = ({
     if (type === "generate") {
       await vapi.start(process.env.NEXT_PUBLIC_VAPI_WORKFLOW_ID!, {
         variableValues: {
-          username: userName,
-          userid: userId,
+          userName: userName,
+          userId: userId,
         },
+        clientMessages: [],
+        serverMessages: []
       });
     } else {
       let formattedQuestions = "";
@@ -136,6 +138,8 @@ const Agent = ({
         variableValues: {
           questions: formattedQuestions,
         },
+        clientMessages: [],
+        serverMessages: []
       });
     }
   };
