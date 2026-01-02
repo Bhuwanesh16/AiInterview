@@ -5,6 +5,19 @@ import { db } from "@/firebase/admin";
 import { getRandomInterviewCover } from "@/lib/utils";
 
 export async function POST(request: Request) {
+  // Handle CORS for VAPI workflow function calls
+  const headers = {
+    "Content-Type": "application/json",
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type",
+  };
+
+  // Handle preflight requests
+  if (request.method === "OPTIONS") {
+    return new Response(null, { status: 200, headers });
+  }
+
   const { type, role, level, techstack, amount, userid } = await request.json();
 
   try {
@@ -25,12 +38,26 @@ export async function POST(request: Request) {
     `,
     });
 
+    let parsedQuestions;
+    try {
+      parsedQuestions = JSON.parse(questions);
+      if (!Array.isArray(parsedQuestions)) {
+        throw new Error("Questions must be an array");
+      }
+    } catch (parseError) {
+      console.error("Error parsing questions:", parseError);
+      return Response.json(
+        { success: false, error: "Failed to parse questions from AI response" },
+        { status: 500 }
+      );
+    }
+
     const interview = {
       role: role,
       type: type,
       level: level,
       techstack: techstack.split(","),
-      questions: JSON.parse(questions),
+      questions: parsedQuestions,
       userId: userid,
       finalized: true,
       coverImage: getRandomInterviewCover(),
@@ -39,13 +66,31 @@ export async function POST(request: Request) {
 
     await db.collection("interviews").add(interview);
 
-    return Response.json({ success: true }, { status: 200 });
+    return Response.json(
+      { success: true, message: "Interview generated successfully" },
+      { status: 200, headers }
+    );
   } catch (error) {
     console.error("Error:", error);
-    return Response.json({ success: false, error: error }, { status: 500 });
+    const errorMessage = error instanceof Error ? error.message : "Unknown error";
+    return Response.json(
+      { success: false, error: errorMessage },
+      { status: 500, headers }
+    );
   }
 }
 
 export async function GET() {
   return Response.json({ success: true, data: "Thank you!" }, { status: 200 });
+}
+
+export async function OPTIONS() {
+  return new Response(null, {
+    status: 200,
+    headers: {
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Methods": "POST, OPTIONS",
+      "Access-Control-Allow-Headers": "Content-Type",
+    },
+  });
 }

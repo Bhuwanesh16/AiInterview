@@ -11,7 +11,11 @@ const Page = async () => {
       <Agent
         userName={user?.name!}
         userId={user?.id}
-        // profileImage={user?.profileURL}
+        jobRole="Frontend Developer"
+        experienceLevel="Junior"
+        techStack="React, Node.js, TypeScript"
+        questionType="Technical"
+        numberOfQuestions={5}
         type="generate"
       />
     </>
