@@ -12,7 +12,6 @@
   "dependencies": {
     "@ai-sdk/google": "^1.2.18",
     "@hookform/resolvers": "^5.0.1",
-    "@next/font": "^14.2.15",
     "@radix-ui/react-label": "^2.1.6",
     "@radix-ui/react-slot": "^1.2.2",
     "@vapi-ai/web": "^2.3.0",
@@ -36,7 +35,7 @@
     "vercel": "^41.7.8",
     "zod": "^3.24.4"
   },
-   "overrides": {
+  "overrides": {
     "@next/swc-win32-x64-msvc": "npm:@next/swc-linux-x64-gnu@15.3.2"
   },
   "devDependencies": {
