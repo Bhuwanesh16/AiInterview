@@ -1,11 +1,16 @@
 import InterviewCard from '@/components/InterviewCard'
 import { Button } from '@/components/ui/button'
 import { dummyInterviews } from '@/constants'
+import { getCurrentUser } from '@/lib/actions/auth.action'
 import Image from 'next/image'
 import Link from 'next/link'
+import { redirect } from 'next/navigation'
 import React from 'react'
 
-const page = () => {
+const page = async () => {
+  const user = await getCurrentUser();
+  if (!user) redirect("/sign-in");
+
   return (
     <>
       <section className="card-cta">
@@ -32,7 +37,7 @@ const page = () => {
         <h2>Your Interviews</h2>
         <div className='interviews-section flex-row gap-5'>
           {dummyInterviews.map((interview) => (
-            <InterviewCard {...interview} key={interview.id}/>
+            <InterviewCard {...interview} key={interview.id} />
 
           ))}
         </div>
@@ -41,7 +46,7 @@ const page = () => {
         <h2>Take an interview</h2>
         <div className='interviews-section'>
           {dummyInterviews.map((interview) => (
-            <InterviewCard {...interview} key={interview.id}/>
+            <InterviewCard {...interview} key={interview.id} />
 
           ))}
           {/* <p>There are no interviews available</p> */}
