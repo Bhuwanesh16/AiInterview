@@ -1,21 +1,28 @@
-
-
-
-
 "use client";
 
 import Image from "next/image";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
+import Vapi from "@vapi-ai/web";
 
 import { cn } from "@/lib/utils";
 import {
-  vapi,
   isVapiInitialized,
   getVapiWorkflowId,
   checkVapiConfig,
 } from "@/lib/vapi.sdk";
+
+// Silence Daily.js deprecation warning in development
+if (process.env.NODE_ENV === "development") {
+  const originalWarn = console.warn;
+  console.warn = (...args) => {
+    if (typeof args[0] === "string" && args[0].includes("daily-js version")) {
+      return;
+    }
+    originalWarn(...args);
+  };
+}
 import { interviewer, VAPI_ASSISTANT_ID } from "@/constants";
 import { createFeedback } from "@/lib/actions/general.action";
 
@@ -52,99 +59,81 @@ const Agent = ({
   const [lastMessage, setLastMessage] = useState<string>("");
   const [functionCallResult, setFunctionCallResult] = useState<any>(null);
 
+  // VAPI Instance Management
+  const vapiRef = useRef<Vapi | null>(null);
+  const callStartedRef = useRef(false);
+  const chatMessagesRef = useRef<HTMLDivElement>(null);
+
+  // Auto-scroll chat to bottom when new messages arrive
+  useEffect(() => {
+    if (chatMessagesRef.current) {
+      chatMessagesRef.current.scrollTop = chatMessagesRef.current.scrollHeight;
+    }
+  }, [messages]);
+
+  // Helper to remove any lingering Daily iframes
+  const cleanupDailyIframes = () => {
+    const iframes = document.querySelectorAll('iframe[src*="daily.co"]');
+    if (iframes.length > 0) {
+      console.log(`[Cleanup] Removing ${iframes.length} lingering Daily iframes`);
+      iframes.forEach(iframe => iframe.remove());
+    }
+  };
+
+  const cleanupCall = () => {
+    if (vapiRef.current) {
+      try {
+        vapiRef.current.stop();
+      } catch (err) {
+        console.warn("Failed to stop VAPI instance:", err);
+      }
+      vapiRef.current = null;
+    }
+    callStartedRef.current = false;
+  };
+
   useEffect(() => {
     // Debug: Check VAPI configuration on mount
     if (type === "generate") {
       checkVapiConfig();
     }
 
-    // Set up event listeners if VAPI SDK is initialized
-    // Note: For backend-started calls, events may still work if SDK is initialized
-    // If SDK is not available, we'll handle status updates differently
-    if (!isVapiInitialized() || !vapi) {
-      console.warn(
-        "VAPI SDK is not initialized. Event listeners will not be set up. " +
-        "Call will still work via backend, but real-time events may not be available."
-      );
-      return;
-    }
+    // Audio debugging: Check microphone permissions and audio context
+    const debugAudio = async () => {
+      try {
+        // Check microphone permissions
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        console.log("✅ Microphone access granted, stream active:", stream.active);
+        stream.getTracks().forEach(track => {
+          console.log("🎤 Audio track:", track.label, "enabled:", track.enabled);
+          track.stop(); // Stop test stream
+        });
 
-    // Store vapi reference for TypeScript type narrowing
-    const vapiInstance = vapi;
-
-    const onCallStart = () => {
-      setCallStatus(CallStatus.ACTIVE);
-    };
-
-    const onCallEnd = () => {
-      setCallStatus(CallStatus.FINISHED);
-    };
-
-    const onMessage = (message: Message) => {
-      if (message.type === "transcript" && message.transcriptType === "final") {
-        const newMessage = { role: message.role, content: message.transcript };
-        setMessages((prev) => [...prev, newMessage]);
-      } else if (message.type === "function-call-result") {
-        // Handle function call results from workflow
-        console.log("Function call result received:", message.functionCallResult);
-        setFunctionCallResult(message.functionCallResult);
-        
-        // Check if this is the interview generation API call result
-        if (message.functionCallResult?.result) {
-          const result = message.functionCallResult.result as { success?: boolean; error?: string };
-          if (result && typeof result === "object" && "success" in result) {
-            if (result.success) {
-              toast.success("Interview generated successfully!", {
-                description: "Your interview questions have been created.",
-              });
-            } else {
-              toast.error("Failed to generate interview", {
-                description: result.error || "An error occurred while generating questions.",
-              });
-            }
+        // Check audio context
+        const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
+        if (AudioContext) {
+          const audioContext = new AudioContext();
+          console.log("🔊 AudioContext state:", audioContext.state);
+          if (audioContext.state === "suspended") {
+            console.warn("⚠️ AudioContext is suspended, may need user interaction");
           }
+          audioContext.close();
         }
-      } else if (message.type === "function-call") {
-        // Log function calls for debugging
-        console.log("Function call initiated:", message.functionCall);
+      } catch (error) {
+        console.error("❌ Microphone access error:", error);
+        toast.error("Microphone Access Required", {
+          description: "Please allow microphone access to start the interview.",
+        });
       }
     };
 
-    const onSpeechStart = () => {
-      console.log("speech start");
-      setIsSpeaking(true);
-    };
+    debugAudio();
 
-    const onSpeechEnd = () => {
-      console.log("speech end");
-      setIsSpeaking(false);
-    };
-
-    const onError = (error: Error) => {
-      console.error("VAPI Error:", error);
-      setCallStatus(CallStatus.INACTIVE);
-      toast.error("Call failed", {
-        description:
-          error.message || "An error occurred during the call. Please try again.",
-      });
-    };
-
-    vapiInstance.on("call-start", onCallStart);
-    vapiInstance.on("call-end", onCallEnd);
-    vapiInstance.on("message", onMessage);
-    vapiInstance.on("speech-start", onSpeechStart);
-    vapiInstance.on("speech-end", onSpeechEnd);
-    vapiInstance.on("error", onError);
-
+    // Cleanup on unmount
     return () => {
-      if (vapiInstance) {
-        vapiInstance.off("call-start", onCallStart);
-        vapiInstance.off("call-end", onCallEnd);
-        vapiInstance.off("message", onMessage);
-        vapiInstance.off("speech-start", onSpeechStart);
-        vapiInstance.off("speech-end", onSpeechEnd);
-        vapiInstance.off("error", onError);
-      }
+      cleanupCall();
+      cleanupDailyIframes(); // Force cleanup
+      console.log("VAPI instance cleaned up");
     };
   }, []);
 
@@ -164,7 +153,7 @@ const Agent = ({
       });
 
       if (success && id) {
-        router.push(`/interview/${interviewId}/feedback`);
+        router.push(`/ interview / ${interviewId}/feedback`);
       } else {
         console.log("Error saving feedback");
         router.push("/");
@@ -172,7 +161,6 @@ const Agent = ({
     };
 
     const handleWorkflowCompletion = async () => {
-      // If workflow used function calls and API was called successfully
       const result = functionCallResult?.result as { success?: boolean } | undefined;
       if (result && typeof result === "object" && result.success === true) {
         // Wait a moment for the interview to be saved, then refresh
@@ -189,14 +177,14 @@ const Agent = ({
         try {
           // Extract interview details from transcript
           const transcript = messages.map((m) => m.content).join(" ");
-          
+
           // Try to extract information using simple pattern matching
           // This is a fallback - ideally the workflow should call the API directly
           const extractedInfo = extractInterviewInfo(transcript);
-          
+
           if (extractedInfo) {
             toast.loading("Generating interview questions...", { id: "generating" });
-            
+
             const response = await fetch("/api/vapi/generate", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
@@ -249,264 +237,197 @@ const Agent = ({
     }
   }, [messages, callStatus, feedbackId, interviewId, router, type, userId, functionCallResult]);
 
+  const setupEventListeners = (vapiInstance: Vapi) => {
+    const onCallStart = () => {
+      console.log("📞 Call started");
+      setCallStatus(CallStatus.ACTIVE);
+
+      // Debug audio tracks
+      setTimeout(() => {
+        console.log("🔍 Checking audio elements...");
+        const audioElements = document.querySelectorAll('audio');
+        console.log(`Found ${audioElements.length} audio element(s)`);
+        audioElements.forEach((audio, index) => {
+          console.log(`Audio ${index}:`, {
+            src: audio.src,
+            paused: audio.paused,
+            muted: audio.muted,
+            volume: audio.volume
+          });
+          if (audio.paused) {
+            audio.play().catch(e => console.error("Audio play failed:", e));
+          }
+        });
+      }, 1000);
+    };
+
+    const onCallEnd = () => {
+      console.log("Call ended normally");
+      setCallStatus(CallStatus.FINISHED);
+      cleanupCall();
+    };
+
+    const onMessage = (message: any) => {
+      if (message.type === "transcript" && message.transcriptType === "final") {
+        const newMessage = { role: message.role, content: message.transcript };
+        setMessages((prev) => [...prev, newMessage]);
+      } else if (message.type === "function-call-result") {
+        console.log("Function call result received:", message.functionCallResult);
+        setFunctionCallResult(message.functionCallResult);
+
+        if (message.functionCallResult?.result) {
+          const result = message.functionCallResult.result as { success?: boolean; error?: string };
+          if (result && typeof result === "object" && "success" in result) {
+            if (result.success) {
+              toast.success("Interview generated successfully!", {
+                description: "Your interview questions have been created.",
+              });
+            } else {
+              toast.error("Failed to generate interview", {
+                description: result.error || "An error occurred while generating questions.",
+              });
+            }
+          }
+        }
+      } else if (message.type === "function-call") {
+        console.log("Function call initiated:", message.functionCall);
+      }
+    };
+
+    const onSpeechStart = () => {
+      console.log("speech start");
+      setIsSpeaking(true);
+    };
+
+    const onSpeechEnd = () => {
+      console.log("speech end");
+      setIsSpeaking(false);
+    };
+
+    const onError = (error: any) => {
+      console.error("VAPI Error:", error);
+
+      // Handle "no-room" or "Meeting has ended" as normal call termination
+      if (
+        error?.error?.type === "no-room" ||
+        error?.message === "Meeting has ended" ||
+        (typeof error === 'object' && error?.type === 'no-room')
+      ) {
+        console.log("Room ended by VAPI workflow");
+        setCallStatus(CallStatus.FINISHED);
+        cleanupCall();
+        return;
+      }
+
+      setCallStatus(CallStatus.INACTIVE);
+      callStartedRef.current = false;
+      toast.error("Call failed", {
+        description: error.message || "An error occurred during the call. Please try again.",
+      });
+    };
+
+    vapiInstance.on("call-start", onCallStart);
+    vapiInstance.on("call-end", onCallEnd);
+    vapiInstance.on("message", onMessage);
+    vapiInstance.on("speech-start", onSpeechStart);
+    vapiInstance.on("speech-end", onSpeechEnd);
+    vapiInstance.on("error", onError);
+  };
+
   const handleCall = async () => {
+    if (callStartedRef.current) {
+      console.warn("VAPI call already active");
+      return;
+    }
+
+    // Force cleanup before starting to prevent "Duplicate DailyIframe" error
+    cleanupDailyIframes();
+
     try {
       setCallStatus(CallStatus.CONNECTING);
 
+      // Initialize if needed
+      if (!vapiRef.current) {
+        const token = process.env.NEXT_PUBLIC_VAPI_WEB_TOKEN;
+        if (token) {
+          const instance = new Vapi(token);
+          vapiRef.current = instance;
+          setupEventListeners(instance);
+        } else {
+          throw new Error("VAPI Token missing");
+        }
+      } else {
+        // If instance exists, we might need to re-attach listeners if they were cleared?
+        // But we only clear them on unmount.
+        // If strict mode double-invoked, we might have a stale ref?
+        // But we used cleanupDailyIframes, so if an iframe exists, it's gone.
+        // We should be safe.
+      }
+
+      callStartedRef.current = true;
+
       if (type === "generate") {
         const workflowId = getVapiWorkflowId();
-        
+
         if (!workflowId) {
           throw new Error(
             "VAPI Workflow ID is not configured. Please add NEXT_PUBLIC_VAPI_WORKFLOW_ID to your .env.local file and restart the development server."
           );
         }
-        if (!isVapiInitialized() || !vapi) {
-          throw new Error("VAPI SDK is not initialized. Please check your environment variables.");
-        }
+
         console.log("Starting VAPI call via SDK with workflow ID:", workflowId.substring(0, 10) + "...");
-        if (
-          !userName ||
-          !jobRole ||
-          !experienceLevel ||
-          !techStack ||
-          !questionType ||
-          typeof numberOfQuestions !== "number"
-        ) {
-          throw new Error(
-            "Missing required workflow variables. Provide userName, jobRole, experienceLevel, techStack, questionType, numberOfQuestions."
-          );
-        }
-        try {
-          const inputText = `Generate a ${String(questionType).trim()} interview for a ${String(experienceLevel).trim()} ${String(jobRole).trim()} using ${String(techStack).trim()} with ${String(numberOfQuestions)} questions for ${String(userName).trim()}.`;
-          await vapi.start({
-            workflowId,
-            input: inputText,
-            variables: {
-              userName: String(userName).trim(),
-              jobRole: String(jobRole).trim(),
-              experienceLevel: String(experienceLevel).trim(),
-              techStack: String(techStack).trim(),
-              questionType: String(questionType).trim(),
-              numberOfQuestions: String(numberOfQuestions),
-            },
-          });
-        } catch {
-          const inputText = `Generate a ${String(questionType).trim()} interview for a ${String(experienceLevel).trim()} ${String(jobRole).trim()} using ${String(techStack).trim()} with ${String(numberOfQuestions)} questions for ${String(userName).trim()}.`;
-          await vapi.start(workflowId, {
-            input: inputText,
-            variables: {
-              userName: String(userName).trim(),
-              jobRole: String(jobRole).trim(),
-              experienceLevel: String(experienceLevel).trim(),
-              techStack: String(techStack).trim(),
-              questionType: String(questionType).trim(),
-              numberOfQuestions: String(numberOfQuestions),
-            },
-          });
-        }
-        setCallStatus(CallStatus.ACTIVE);
-        return;
 
-        console.log("Starting VAPI call via backend with workflow ID:", workflowId.substring(0, 10) + "...");
+        if (!userName) {
+          throw new Error("Missing required user information.");
+        }
 
-        // Call backend API route instead of using SDK directly
-        const response = await fetch("/api/vapi/call", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            workflowId: workflowId
-          }),
+        const variableValues: Record<string, any> = {
+          userName: String(userName).trim(),
+        };
+
+        if (jobRole) variableValues.jobRole = String(jobRole).trim();
+        if (experienceLevel) variableValues.experienceLevel = String(experienceLevel).trim();
+        if (techStack) variableValues.techStack = String(techStack).trim();
+        if (questionType) variableValues.questionType = String(questionType).trim();
+        if (numberOfQuestions) variableValues.numberOfQuestions = Number(numberOfQuestions);
+
+        await vapiRef.current.start(workflowId, {
+          variableValues,
+          clientMessages: [],
+          serverMessages: []
         });
 
-        const data = await response.json();
+        setCallStatus(CallStatus.ACTIVE);
 
-        if (!response.ok) {
-          // For client errors (4xx), show backend message and avoid SDK fallback
-          if (response.status >= 400 && response.status < 500) {
-            const backendMsg =
-              (data?.error || data?.message) ??
-              "Bad Request - Please verify workflow ID, variables, and token permissions.";
-            toast.error("Call failed", {
-              description: `Backend error (${response.status}): ${backendMsg}`,
-              duration: 8000,
-              action: {
-                label: "Open Dashboard",
-                onClick: () => window.open("https://dashboard.vapi.ai", "_blank"),
-              },
-            });
-            setCallStatus(CallStatus.INACTIVE);
-            return;
-          }
-
-          console.warn("Backend call failed, attempting client-side fallback...");
-
-          if (!isVapiInitialized() || !vapi) {
-            throw new Error("VAPI SDK is not initialized. Cannot fallback to client-side call.");
-          }
-
-          console.log("Starting VAPI call via SDK with workflow ID:", workflowId);
-          try {
-            // Log the token being used (masked) for debugging
-            if (isVapiInitialized()) {
-              const tokenInfo = checkVapiConfig();
-              console.log("SDK Token Info:", tokenInfo);
-            }
-            
-            await vapi.start(workflowId);
-          } catch (sdkError: any) {
-            console.error("SDK Fallback Error (Raw):", sdkError);
-            let errorMsg = "Unknown SDK Error";
-            try {
-              if (sdkError && typeof sdkError === "object" && "status" in sdkError && typeof (sdkError as any).text === "function") {
-                const status = (sdkError as any).status;
-                const statusText = (sdkError as any).statusText;
-                const bodyText = await (sdkError as any).text();
-                let body;
-                try {
-                  body = bodyText ? JSON.parse(bodyText) : {};
-                } catch {
-                  body = { raw: bodyText };
-                }
-                errorMsg = `HTTP ${status} ${statusText}` + (body?.message ? `: ${body.message}` : body?.error ? `: ${body.error}` : "");
-                console.error("SDK Error Response Body:", body);
-              } else if (sdkError?.message) {
-                errorMsg = sdkError.message;
-              } else if (sdkError?.error) {
-                errorMsg = typeof sdkError.error === "string" ? sdkError.error : JSON.stringify(sdkError.error);
-              } else if (typeof sdkError === "string") {
-                errorMsg = sdkError;
-              } else if (sdkError && Object.keys(sdkError).length === 0) {
-                errorMsg = "Connection failed (Empty Error). This usually means your Web Token is invalid, microphone access was denied, or the network blocked the connection.";
-              } else {
-                errorMsg = JSON.stringify(sdkError);
-              }
-            } catch (parseError) {
-              console.error("Failed to parse SDK error:", parseError);
-              errorMsg = sdkError?.message || "Failed to parse error response";
-            }
-            toast.error("VAPI Connection Failed", {
-              description: errorMsg,
-              duration: 8000,
-              action: {
-                label: "Troubleshoot",
-                onClick: () => window.open("https://dashboard.vapi.ai/settings", "_blank"),
-              }
-            });
-            throw new Error(`SDK Fallback failed: ${errorMsg}`);
-          }
-          
-          setCallStatus(CallStatus.ACTIVE);
-          return;
-        }
-
-        console.log("Call started successfully via backend:", data);
-        
-        // The call is started via backend API
-        // If the response includes a call ID, we can use it for tracking
-        // Note: Event handling may work automatically if SDK is initialized
-        // Otherwise, we'll rely on the backend call status
-        
-        // Update call status based on response
-        if (data.id || data.callId) {
-          console.log("Call ID received:", data.id || data.callId);
-          // The call should be active now
-          setCallStatus(CallStatus.ACTIVE);
-        } else {
-          // If no call ID, assume it started successfully
-          setCallStatus(CallStatus.ACTIVE);
-        }
       } else {
-        // For interview type, we still use the SDK directly with assistant config
-        // But we could also route this through backend if needed
-        if (!isVapiInitialized() || !vapi) {
-          throw new Error(
-            "VAPI is not configured. Please check your environment variables."
-          );
-        }
-
+        // Interview usage
         let formattedQuestions = "";
         if (questions && questions.length > 0) {
           formattedQuestions = questions
             .map((question) => `- ${question}`)
             .join("\n");
         } else {
-          throw new Error("No questions available for this interview.");
+          console.warn("No questions found for the interview. Starting with default behavior.");
         }
 
-        await vapi.start(interviewer, {
+        await vapiRef.current.start(interviewer, {
           variableValues: {
             questions: formattedQuestions,
           },
           clientMessages: [],
           serverMessages: [],
         });
-        setCallStatus(CallStatus.ACTIVE);
-        return;
-        
-        // For assistant-based calls, try backend first, fallback to SDK
-        try {
-          const response = await fetch("/api/vapi/call", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              assistantId: VAPI_ASSISTANT_ID,
-              variableValues: {
-                questions: formattedQuestions,
-              },
-            }),
-          });
 
-          if (response.ok) {
-            const data = await response.json();
-            console.log("Call started via backend:", data);
-          } else {
-            // Fallback to SDK if backend fails
-            console.log("Backend call failed, using SDK fallback");
-            await vapi.start(interviewer, {
-              variableValues: {
-                questions: formattedQuestions,
-              },
-              clientMessages: [],
-              serverMessages: [],
-            });
-          }
-        } catch (backendError) {
-          // Fallback to SDK
-          console.log("Backend error, using SDK fallback:", backendError);
-          try {
-            await vapi.start(interviewer, {
-              variableValues: {
-                questions: formattedQuestions,
-              },
-              clientMessages: [],
-              serverMessages: [],
-            });
-          } catch (sdkError: any) {
-            console.error("SDK Fallback Error:", sdkError);
-            throw new Error(`SDK Fallback failed: ${sdkError?.message || JSON.stringify(sdkError)}`);
-          }
-        }
+        setCallStatus(CallStatus.ACTIVE);
       }
+
     } catch (error: any) {
       console.error("Error starting call:", error);
-      console.error("Error details:", {
-        error,
-        errorType: typeof error,
-        errorMessage: error?.message,
-        errorString: String(error),
-        errorJSON: JSON.stringify(error),
-      });
-      
+      callStartedRef.current = false;
       setCallStatus(CallStatus.INACTIVE);
-      
-      // Extract meaningful error message
+
       let errorMessage = "Failed to start the call. ";
-      
+
       if (error instanceof Error) {
         errorMessage += error.message;
       } else if (error?.message) {
@@ -514,17 +435,16 @@ const Agent = ({
       } else if (typeof error === "string") {
         errorMessage += error;
       } else if (error && typeof error === "object") {
-        // Try to extract any useful information from error object
         const errorStr = JSON.stringify(error);
         if (errorStr !== "{}") {
           errorMessage += errorStr;
         } else {
-          errorMessage += "Unknown error occurred. Please check: 1) Your VAPI token is valid, 2) Workflow ID is correct, 3) Workflow is published in VAPI dashboard.";
+          errorMessage += "Unknown error occurred. Please check configuration.";
         }
       } else {
         errorMessage += "Please check your connection and VAPI configuration.";
       }
-      
+
       toast.error("Call failed", {
         description: errorMessage,
         duration: 5000,
@@ -533,10 +453,11 @@ const Agent = ({
   };
 
   const handleDisconnect = () => {
-    setCallStatus(CallStatus.FINISHED);
-    if (vapi) {
-      vapi.stop();
+    if (vapiRef.current) {
+      vapiRef.current.stop();
     }
+    setCallStatus(CallStatus.FINISHED);
+    callStartedRef.current = false;
   };
 
   return (
@@ -572,25 +493,65 @@ const Agent = ({
         </div>
       </div>
 
+      {/* Chat Transcript */}
       {messages.length > 0 && (
-        <div className="transcript-border">
-          <div className="transcript">
-            <p
-              key={lastMessage}
-              className={cn(
-                "transition-opacity duration-500 opacity-0",
-                "animate-fadeIn opacity-100"
-              )}
-            >
-              {lastMessage}
-            </p>
+        <div className="chat-container">
+          <div ref={chatMessagesRef} className="chat-messages">
+            {messages.map((msg, index) => (
+              <div
+                key={index}
+                className={cn(
+                  "chat-message",
+                  msg.role === "user" ? "chat-message-user" : "chat-message-assistant"
+                )}
+              >
+                <div className="chat-bubble">
+                  <div className="chat-role">
+                    {msg.role === "user" ? "You" : "AI Interviewer"}
+                  </div>
+                  <div className="chat-content">{msg.content}</div>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       )}
 
+      {/* Status Indicator */}
+      <div className="status-indicator">
+        {callStatus === CallStatus.CONNECTING && (
+          <div className="status-connecting">
+            <div className="spinner" />
+            <span>Connecting to interviewer...</span>
+          </div>
+        )}
+        {callStatus === CallStatus.ACTIVE && !isSpeaking && (
+          <div className="status-listening">
+            <div className="mic-pulse" />
+            <span>Listening...</span>
+          </div>
+        )}
+        {callStatus === CallStatus.ACTIVE && isSpeaking && (
+          <div className="status-speaking">
+            <div className="waveform">
+              <span className="bar"></span>
+              <span className="bar"></span>
+              <span className="bar"></span>
+              <span className="bar"></span>
+              <span className="bar"></span>
+            </div>
+            <span>AI is speaking...</span>
+          </div>
+        )}
+      </div>
+
       <div className="w-full flex justify-center">
         {callStatus !== "ACTIVE" ? (
-          <button className="relative btn-call" onClick={() => handleCall()}>
+          <button
+            className="relative btn-call"
+            onClick={() => handleCall()}
+            disabled={callStatus === CallStatus.CONNECTING || callStartedRef.current}
+          >
             <span
               className={cn(
                 "absolute animate-ping rounded-full opacity-75",
@@ -626,31 +587,31 @@ function extractInterviewInfo(transcript: string): {
   try {
     // This is a simple extraction - you may need to improve this based on your workflow's conversation pattern
     const lowerTranscript = transcript.toLowerCase();
-    
+
     // Extract role (look for patterns like "role is", "position is", etc.)
     const roleMatch = transcript.match(/(?:role|position|job)\s*(?:is|:)?\s*([^,.\n]+)/i);
     const role = roleMatch ? roleMatch[1].trim() : "Software Developer";
-    
+
     // Extract level
     const levelMatch = lowerTranscript.match(/(junior|mid-level|senior|entry|experienced)/i);
     const level = levelMatch ? levelMatch[1] : "Mid-level";
-    
+
     // Extract tech stack (look for common tech terms)
     const techKeywords = [
-      "react", "vue", "angular", "node", "python", "java", "typescript", 
+      "react", "vue", "angular", "node", "python", "java", "typescript",
       "javascript", "next.js", "express", "mongodb", "postgresql", "aws"
     ];
     const foundTech = techKeywords.filter(tech => lowerTranscript.includes(tech));
     const techstack = foundTech.length > 0 ? foundTech.join(", ") : "JavaScript, React";
-    
+
     // Extract question type
     const typeMatch = lowerTranscript.match(/(technical|behavioral|mixed|behavioural)/i);
     const type = typeMatch ? typeMatch[1] : "Mixed";
-    
+
     // Extract number of questions
     const amountMatch = transcript.match(/(\d+)\s*(?:questions?|qs?)/i);
     const amount = amountMatch ? parseInt(amountMatch[1]) : 10;
-    
+
     return {
       role,
       level,
