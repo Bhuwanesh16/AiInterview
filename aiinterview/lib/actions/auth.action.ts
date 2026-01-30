@@ -2,6 +2,7 @@
 
 import { auth, db } from "@/firebase/admin";
 import { cookies } from "next/headers";
+import { User, SignInParams, SignUpParams } from "@/types";
 
 const SESSION_DURATION = 60 * 60 * 24 * 7;
 

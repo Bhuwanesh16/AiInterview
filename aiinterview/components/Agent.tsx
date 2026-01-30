@@ -25,6 +25,7 @@ if (process.env.NODE_ENV === "development") {
 }
 import { interviewer, VAPI_ASSISTANT_ID } from "@/constants";
 import { createFeedback } from "@/lib/actions/general.action";
+import { AgentProps } from "@/types";
 
 enum CallStatus {
   INACTIVE = "INACTIVE",
