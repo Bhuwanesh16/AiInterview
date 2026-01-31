@@ -7,9 +7,6 @@ const nextConfig: NextConfig = {
     FIREBASE_PRIVATE_KEY: process.env.FIREBASE_PRIVATE_KEY,
     // Note: NEXT_PUBLIC_VAPI_WEB_TOKEN is already public and accessible via NEXT_PUBLIC_ prefix
   },
-  eslint:{
-    ignoreDuringBuilds: true,
-  },
   typescript: {
     ignoreBuildErrors: true,
   },

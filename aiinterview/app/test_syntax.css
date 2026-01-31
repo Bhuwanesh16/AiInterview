@@ -1,0 +1,3 @@
+.test:hover {
+    @apply !bg-red-500;
+}

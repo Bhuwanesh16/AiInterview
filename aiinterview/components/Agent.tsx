@@ -59,6 +59,8 @@ const Agent = ({
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [lastMessage, setLastMessage] = useState<string>("");
   const [functionCallResult, setFunctionCallResult] = useState<any>(null);
+  /** Live/current AI question shown in the message box (partial + final from assistant) */
+  const [currentQuestionText, setCurrentQuestionText] = useState<string>("");
 
   // VAPI Instance Management
   const vapiRef = useRef<Vapi | null>(null);
@@ -265,13 +267,24 @@ const Agent = ({
     const onCallEnd = () => {
       console.log("Call ended normally");
       setCallStatus(CallStatus.FINISHED);
+      setCurrentQuestionText("");
       cleanupCall();
     };
 
     const onMessage = (message: any) => {
-      if (message.type === "transcript" && message.transcriptType === "final") {
-        const newMessage = { role: message.role, content: message.transcript };
-        setMessages((prev) => [...prev, newMessage]);
+      if (message.type === "transcript") {
+        const transcript = message.transcript ?? "";
+        const isAssistant = message.role === "assistant";
+        if (isAssistant) {
+          setCurrentQuestionText(transcript);
+        }
+        if (message.transcriptType === "final") {
+          const newMessage = { role: message.role, content: transcript };
+          setMessages((prev) => [...prev, newMessage]);
+          if (isAssistant) {
+            setCurrentQuestionText(transcript);
+          }
+        }
       } else if (message.type === "function-call-result") {
         console.log("Function call result received:", message.functionCallResult);
         setFunctionCallResult(message.functionCallResult);
@@ -346,6 +359,7 @@ const Agent = ({
 
     try {
       setCallStatus(CallStatus.CONNECTING);
+      setCurrentQuestionText("");
 
       // Initialize if needed
       if (!vapiRef.current) {
@@ -394,8 +408,6 @@ const Agent = ({
 
         await vapiRef.current.start(workflowId, {
           variableValues,
-          clientMessages: [],
-          serverMessages: []
         });
 
         setCallStatus(CallStatus.ACTIVE);
@@ -415,8 +427,6 @@ const Agent = ({
           variableValues: {
             questions: formattedQuestions,
           },
-          clientMessages: [],
-          serverMessages: [],
         });
 
         setCallStatus(CallStatus.ACTIVE);
@@ -490,6 +500,34 @@ const Agent = ({
               className="rounded-full object-cover size-[120px]"
             />
             <h3>{userName}</h3>
+          </div>
+        </div>
+      </div>
+
+      {/* Current question / AI message box - always visible during call or when there's a question */}
+      <div className="question-message-box-wrapper">
+        <div
+          className={cn(
+            "question-message-box",
+            (callStatus === CallStatus.ACTIVE || callStatus === CallStatus.CONNECTING) && "question-message-box-active"
+          )}
+        >
+          <div className="question-message-box-header">
+            <span className="question-message-box-label">Current question</span>
+            {isSpeaking && (
+              <span className="question-message-box-live" aria-hidden>Live</span>
+            )}
+          </div>
+          <div className="question-message-box-content">
+            {currentQuestionText ? (
+              <p className="question-message-box-text">{currentQuestionText}</p>
+            ) : callStatus === CallStatus.CONNECTING ? (
+              <p className="question-message-box-placeholder">Connecting…</p>
+            ) : callStatus === CallStatus.ACTIVE ? (
+              <p className="question-message-box-placeholder">Listening for the next question…</p>
+            ) : (
+              <p className="question-message-box-placeholder">Start the call to see the interviewer&apos;s question here.</p>
+            )}
           </div>
         </div>
       </div>

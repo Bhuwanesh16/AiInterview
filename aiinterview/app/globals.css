@@ -5,22 +5,28 @@
 @custom-variant dark (&:is(.dark *));
 
 @theme {
-  --color-success-100: #49de50;
-  --color-success-200: #42c748;
-  --color-destructive-100: #f75353;
-  --color-destructive-200: #c44141;
+  /* High-contrast success: vivid green */
+  --color-success-100: #22c55e;
+  --color-success-200: #16a34a;
 
-  --color-primary-100: #dddfff;
-  --color-primary-200: #cac5fe;
+  /* High-contrast destructive: vivid red */
+  --color-destructive-100: #ef4444;
+  --color-destructive-200: #dc2626;
 
-  --color-light-100: #d6e0ff;
-  --color-light-400: #6870a6;
-  --color-light-600: #4f557d;
-  --color-light-800: #24273a;
+  /* High-contrast primary: strong violet/lavender on dark */
+  --color-primary-100: #e0e7ff;
+  --color-primary-200: #a78bfa;
 
-  --color-dark-100: #020408;
-  --color-dark-200: #27282f;
-  --color-dark-300: #242633;
+  /* Brighter text on dark for readability */
+  --color-light-100: #e8ecff;
+  --color-light-400: #94a3c4;
+  --color-light-600: #64748f;
+  --color-light-800: #334155;
+
+  /* Deeper darks for stronger contrast */
+  --color-dark-100: #050508;
+  --color-dark-200: #16171d;
+  --color-dark-300: #1e1f28;
 
   --font-mona-sans: "Mona Sans", sans-serif;
 
@@ -166,7 +172,7 @@
 
 @layer components {
   .btn-call {
-    @apply inline-block px-7 py-3 font-bold text-sm leading-5 text-white transition-colors duration-150 bg-success-100 border border-transparent rounded-full shadow-sm focus:outline-none focus:shadow-2xl active:bg-success-200 hover:bg-success-200 min-w-28 cursor-pointer items-center justify-center overflow-visible;
+    @apply inline-block px-7 py-3 font-bold text-sm leading-5 text-white transition-all duration-200 bg-success-100 border border-transparent rounded-full shadow-md focus:outline-none focus:ring-2 focus:ring-success-100 focus:ring-offset-2 focus:ring-offset-dark-100 active:scale-[0.98] hover:bg-success-200 hover:shadow-lg min-w-28 cursor-pointer items-center justify-center overflow-visible;
 
     .span {
       @apply bg-success-100 h-[85%] w-[65%];
@@ -174,7 +180,7 @@
   }
 
   .btn-disconnect {
-    @apply inline-block px-7 py-3 text-sm font-bold leading-5 text-white transition-colors duration-150 bg-destructive-100 border border-transparent rounded-full shadow-sm focus:outline-none focus:shadow-2xl active:bg-destructive-200 hover:bg-destructive-200 min-w-28;
+    @apply inline-block px-7 py-3 text-sm font-bold leading-5 text-white transition-all duration-200 bg-destructive-100 border border-transparent rounded-full shadow-md focus:outline-none focus:ring-2 focus:ring-destructive-100 focus:ring-offset-2 focus:ring-offset-dark-100 active:scale-[0.98] hover:bg-destructive-200 hover:shadow-lg min-w-28 cursor-pointer;
   }
 
   .btn-upload {
@@ -182,11 +188,19 @@
   }
 
   .btn-primary {
-    @apply w-fit !bg-primary-200 !text-dark-100 hover: !bg-primary-200/80 !rounded-full !font-bold px-5 cursor-pointer min-h-10;
+    @apply w-fit !bg-primary-200 !text-dark-100 !rounded-full !font-bold px-5 cursor-pointer min-h-10;
+
+    &:hover {
+      @apply !bg-primary-200/80;
+    }
   }
 
   .btn-secondary {
-    @apply w-fit !bg-dark-200 !text-primary-200 hover: !bg-dark-200/80 !rounded-full !font-bold px-5 cursor-pointer min-h-10;
+    @apply w-fit !bg-dark-200 !text-primary-200 !rounded-full !font-bold px-5 cursor-pointer min-h-10;
+
+    &:hover {
+      @apply !bg-dark-200/80;
+    }
   }
 
   .btn-upload {
@@ -209,11 +223,19 @@
     }
 
     .input {
-      @apply !bg-dark-200 !rounded-full !min-h-12 !px-5 placeholder: !text-light-100;
+      @apply !bg-dark-200 !rounded-full !min-h-12 !px-5;
+
+      &::placeholder {
+        @apply !text-light-100;
+      }
     }
 
     .btn {
-      @apply !w-full !bg-primary-200 !text-dark-100 hover: !bg-primary-200/80 !rounded-full !min-h-10 !font-bold !px-5 cursor-pointer;
+      @apply !w-full !bg-primary-200 !text-dark-100 !rounded-full !min-h-10 !font-bold !px-5 cursor-pointer;
+
+      &:hover {
+        @apply !bg-primary-200/80;
+      }
     }
   }
 
@@ -225,11 +247,17 @@
     }
 
     .card-interviewer {
-      @apply flex-center flex-col gap-2 p-7 h-[400px] blue-gradient-dark rounded-lg border-2 border-primary-200/50 flex-1 sm:basis-1/2 w-full;
+      @apply flex-center flex-col gap-2 p-7 h-[400px] blue-gradient-dark rounded-2xl border-2 border-primary-200/50 flex-1 sm:basis-1/2 w-full transition-all duration-300;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+    }
+
+    .card-interviewer:focus-within {
+      @apply border-primary-200/80;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2), 0 0 0 3px rgba(202, 197, 254, 0.2);
     }
 
     .avatar {
-      @apply z-10 flex items-center justify-center blue-gradient rounded-full size-[120px] relative;
+      @apply z-10 flex items-center justify-center blue-gradient rounded-full size-[120px] relative shadow-lg;
 
       .animate-speak {
         @apply absolute inline-flex size-5/6 animate-ping rounded-full bg-primary-200 opacity-75;
@@ -237,7 +265,7 @@
     }
 
     .card-border {
-      @apply border-gradient p-0.5 rounded-2xl flex-1 sm:basis-1/2 w-full h-[400px] max-md:hidden;
+      @apply border-gradient p-0.5 rounded-2xl flex-1 sm:basis-1/2 w-full h-[400px] max-md:hidden transition-shadow duration-300;
     }
 
     .card-content {
@@ -274,11 +302,28 @@
   }
 
   .card-cta {
-    @apply flex flex-row blue-gradient-dark rounded-3xl px-16 py-6 items-center justify-between max-sm:px-4;
+    @apply flex flex-row blue-gradient-dark rounded-3xl px-16 py-6 items-center justify-between max-sm:px-4 shadow-xl border border-primary-200/20;
   }
 
   .interviews-section {
     @apply flex flex-wrap gap-4 max-lg:flex-col w-full items-stretch;
+  }
+
+  /* Interview page header */
+  .interview-page-header {
+    @apply flex flex-row gap-4 justify-between items-center flex-wrap max-sm:flex-col max-sm:items-stretch mb-8 p-5 rounded-2xl bg-dark-200/60 border border-primary-200/20;
+  }
+
+  .interview-page-header-main {
+    @apply flex flex-row gap-4 items-center max-sm:flex-col max-sm:items-start;
+  }
+
+  .interview-page-title-row {
+    @apply flex flex-row gap-3 items-center;
+  }
+
+  .interview-page-badge {
+    @apply inline-flex items-center px-4 py-2 rounded-xl text-sm font-medium bg-primary-200/20 text-primary-100 border border-primary-200/40;
   }
 
   .interview-text {
@@ -294,7 +339,7 @@
   }
 
   .card-interview {
-    @apply dark-gradient rounded-2xl min-h-full flex flex-col p-6 relative overflow-hidden gap-10 justify-between;
+    @apply dark-gradient rounded-2xl min-h-full flex flex-col p-6 relative overflow-hidden gap-10 justify-between transition-all duration-200 border border-transparent hover:border-primary-200/30 hover:shadow-lg;
 
     .badge-text {
       @apply text-sm font-semibold capitalize;
@@ -303,7 +348,7 @@
 
   /* Chat Interface Styles */
   .chat-container {
-    @apply w-full max-w-4xl mx-auto mt-8 border-gradient p-0.5 rounded-2xl;
+    @apply w-full max-w-4xl mx-auto mt-8 border-gradient p-0.5 rounded-2xl shadow-lg;
   }
 
   .chat-messages {
@@ -332,7 +377,7 @@
   }
 
   .chat-message-assistant .chat-bubble {
-    @apply bg-gradient-to-br from-[#4B4D4F] to-[#2A2C2E] text-white border border-primary-200/20;
+    @apply bg-gradient-to-br from-[#334155] to-[#1e1f28] text-light-100 border border-primary-200/30;
   }
 
   .chat-role {
@@ -343,6 +388,50 @@
     @apply text-sm leading-relaxed;
   }
 
+  /* Question / AI message box - displays current VAPI question */
+  .question-message-box-wrapper {
+    @apply w-full max-w-4xl mx-auto mt-8;
+  }
+
+  .question-message-box {
+    @apply rounded-2xl border-2 border-primary-200/40 bg-dark-200/90 backdrop-blur-sm overflow-hidden transition-all duration-300 ease-out;
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.25), inset 0 1px 0 rgba(167, 123, 250, 0.12);
+  }
+
+  .question-message-box-active {
+    @apply border-primary-200/70 shadow-lg;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(167, 123, 250, 0.25), inset 0 1px 0 rgba(167, 123, 250, 0.15);
+  }
+
+  .question-message-box-header {
+    @apply flex items-center justify-between gap-3 px-5 py-3 border-b border-primary-200/30 bg-dark-300/70;
+  }
+
+  .question-message-box-label {
+    @apply text-xs font-semibold uppercase tracking-wider text-primary-100;
+  }
+
+  .question-message-box-live {
+    @apply inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-success-100/20 text-success-100 border border-success-100/40;
+  }
+
+  .question-message-box-live::before {
+    content: "";
+    @apply w-1.5 h-1.5 rounded-full bg-success-100 animate-pulse;
+  }
+
+  .question-message-box-content {
+    @apply px-5 py-4 min-h-[88px] flex items-center;
+  }
+
+  .question-message-box-text {
+    @apply text-base leading-relaxed text-light-100 m-0;
+  }
+
+  .question-message-box-placeholder {
+    @apply text-sm text-light-400 italic m-0;
+  }
+
   /* Status Indicator Styles */
   .status-indicator {
     @apply w-full flex justify-center mt-6 min-h-[60px] items-center;
@@ -351,7 +440,7 @@
   .status-connecting,
   .status-listening,
   .status-speaking {
-    @apply flex items-center gap-3 px-6 py-3 rounded-full bg-dark-200/50 backdrop-blur-sm border border-primary-200/30;
+    @apply flex items-center gap-3 px-6 py-3 rounded-full bg-dark-300/80 backdrop-blur-sm border border-primary-200/40;
   }
 
   .status-connecting span,
@@ -427,11 +516,11 @@
 }
 
 @utility dark-gradient {
-  @apply bg-gradient-to-b from-[#1A1C20] to-[#08090D];
+  @apply bg-gradient-to-b from-[#1e1f28] to-[#050508];
 }
 
 @utility border-gradient {
-  @apply bg-gradient-to-b from-[#4B4D4F] to-[#4B4D4F33];
+  @apply bg-gradient-to-b from-[#475569] to-[#47556940];
 }
 
 @utility pattern {
@@ -439,11 +528,11 @@
 }
 
 @utility blue-gradient-dark {
-  @apply bg-gradient-to-b from-[#171532] to-[#08090D];
+  @apply bg-gradient-to-b from-[#1e1b4b] to-[#050508];
 }
 
 @utility blue-gradient {
-  @apply bg-gradient-to-l from-[#FFFFFF] to-[#CAC5FE];
+  @apply bg-gradient-to-l from-[#f8fafc] to-[#a78bfa];
 }
 
 @utility flex-center {
