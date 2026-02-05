@@ -70,9 +70,36 @@ export async function POST(request: Request) {
       { success: true, message: "Interview generated successfully" },
       { status: 200, headers }
     );
-  } catch (error) {
+  } catch (error: unknown) {
     console.error("Error:", error);
-    const errorMessage = error instanceof Error ? error.message : "Unknown error";
+
+    // Google Generative Language API not enabled (403)
+    const isGeminiDisabled =
+      error &&
+      typeof error === "object" &&
+      "statusCode" in error &&
+      (error as { statusCode?: number }).statusCode === 403;
+    const body = error && typeof error === "object" && "responseBody" in error
+      ? String((error as { responseBody?: string }).responseBody)
+      : "";
+    const isServiceDisabled =
+      isGeminiDisabled ||
+      (typeof body === "string" && body.includes("SERVICE_DISABLED") && body.includes("generativelanguage"));
+
+    if (isServiceDisabled) {
+      return Response.json(
+        {
+          success: false,
+          error:
+            "Generative Language API (Gemini) is not enabled for your Google Cloud project. " +
+            "Enable it at: https://console.cloud.google.com/apis/library/generativelanguage.googleapis.com",
+        },
+        { status: 503, headers }
+      );
+    }
+
+    const errorMessage =
+      error instanceof Error ? error.message : "Unknown error";
     return Response.json(
       { success: false, error: errorMessage },
       { status: 500, headers }
